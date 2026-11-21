@@ -1,0 +1,8 @@
+/* ---- v6: add an airline (from the portal or new) ---- */
+.ls-add{border-color:var(--c-deep80);box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.ls-add .ls-seg{margin-top:4px}
+.ls-add .ls-toolbar .sm{color:var(--muted)}
+.ls-add .ls-table td.ls-rm{text-align:right;white-space:nowrap}
+.ls-add-go{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:14px}
+.ls-add-go .ls-note{margin:0}
+@media (max-width:760px){.ls-add-go .btn{width:100%}.ls-add .ls-table td.ls-rm{text-align:left}}

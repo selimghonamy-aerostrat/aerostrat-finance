@@ -1,0 +1,79 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><title>AeroStrat Finance Tracker</title><link rel="icon" type="image/svg+xml" href="/brand/icon.svg?v=3"><link rel="apple-touch-icon" href="/brand/icon.svg?v=3"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/open-sauce-one@5.3.0/400.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/open-sauce-one@5.3.0/500.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/open-sauce-one@5.3.0/600.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/open-sauce-one@5.3.0/700.css"><style>body{margin:0}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/brand.css?v=1"></head><body>
+<div class="login" id="login" hidden><form id="loginForm" autocomplete="on"><div class="lg-brand"><img id="lgLogo" alt="AeroStrat"><span>Finance Tracker</span></div>
+<label class="field"><span class="muted small">Username</span><input class="in" name="name" required autocomplete="username" autocapitalize="none"></label>
+<label class="field"><span class="muted small">Password</span><input class="in" name="pw" type="password" required autocomplete="current-password"></label>
+<button class="btn cta" type="submit">Sign in</button><div class="msg" id="loginMsg" role="status"></div></form></div>
+<div id="app"></div>
+<script>fetch("/logos.json").then(function(r){return r.json()}).then(function(l){document.getElementById("lgLogo").src=l.white}).catch(function(){});</script>
+<script>
+/* Vercel host shim: provides window.claude.use('db'|'user'|'downloads') on top of /api/db, behind a password. */
+(function(){
+  const logosP=fetch('/logos.json').then(r=>r.text());
+  const LS='stratos-auth-v1';
+  let auth=null; try{auth=JSON.parse(localStorage.getItem(LS)||'null');}catch(e){}
+  let role=null, ready, resolveReady; ready=new Promise(r=>resolveReady=r);
+  const api=async(q,opt)=>{opt=opt||{}; const r=await fetch('/api/db?'+q,{method:opt.method||'GET',headers:Object.assign({'x-app-key':auth?auth.key:'','x-app-user':auth?auth.name:'','content-type':'application/json'}),body:opt.body?JSON.stringify(opt.body):undefined,cache:'no-store'});
+    if(r.status===401){ try{localStorage.removeItem(LS);}catch(e){} location.reload(); throw {code:'revoked'}; }
+    const j=await r.json().catch(()=>({})); if(!r.ok) throw {code:j.code||(r.status===403?'invalid_argument':'unavailable'),message:j.error||String(r.status)}; return j; };
+  const uid=name=>'u_'+encodeURIComponent(name||'Someone');
+  const nameOf=id=>{try{return decodeURIComponent(String(id||'').replace(/^u_/,''));}catch(e){return '';}};
+  const snap=(id,d)=>({id,exists:!!(d&&d.exists),data:()=>d&&d.data,metadata:{fromCache:false,hasPendingWrites:false}});
+  const DOCMAP={'core/config':'core','ops/data':'ops'};
+  const lastSeen={};
+  function docRef(path){
+    const id=path.split('/').pop(), key=DOCMAP[path];
+    if(path.startsWith('history/')){ const hid=path.slice(8);
+      return {id:hid,path,get:async()=>snap(hid,await api('history='+encodeURIComponent(hid))),delete:async()=>{},set:async()=>{},onSnapshot:()=>()=>{}}; }
+    if(!key) return {id,path,get:async()=>snap(id,{exists:false}),set:async()=>{},delete:async()=>{},onSnapshot:(n)=>{setTimeout(()=>n(snap(id,{exists:false})),0);return()=>{};}};
+    return {id,path,
+      get:async()=>snap(id,await api('doc='+key)),
+      set:async(b)=>{ await api('doc='+key,{method:'PUT',body:b}); lastSeen[key]=b.savedAt||new Date().toISOString(); },
+      delete:async()=>{},
+      onSnapshot:(next,err)=>{ let stop=false, first=true;
+        const tick=async()=>{ if(stop) return; if(!first&&document.hidden){ setTimeout(tick,30000); return; }
+          try{ const d=await api('doc='+key); const at=d.exists&&d.data&&d.data.savedAt||'';
+            if(first||!lastSeen[key]||at>lastSeen[key]){ if(at) lastSeen[key]=at; next(snap(id,d)); }
+            first=false; }catch(e){ if(first){ first=false; next(snap(id,{exists:false})); } }
+          setTimeout(tick,30000); };
+        tick(); return ()=>{stop=true;}; } };
+  }
+  function collRef(c){
+    let lim=60; const q={orderBy:()=>q,where:()=>q,limit:n=>{lim=n;return q;},
+      get:async()=>{ const idx=await api('history='); const items=(idx.items||[]).slice(0,lim); const docs=items.map(it=>({id:it.id,exists:true,data:()=>Object.assign({},it)}));
+        return {docs,size:docs.length,empty:!docs.length,docChanges:()=>[],metadata:{fromCache:false,hasPendingWrites:false}}; },
+      add:async(b)=>{ const r=await api('history',{method:'POST',body:b}); return docRef('history/'+r.id); },
+      doc:id=>docRef(c+'/'+id), onSnapshot:()=>()=>{} };
+    return q;
+  }
+  const db={doc:docRef,collection:collRef};
+  const user={ me:async()=>({id:uid(auth&&auth.name),name:(auth&&auth.name)||'',avatarUrl:'',color:'#00348C',email:null,isOwner:role==='admin',canEdit:role==='admin'}),
+    id:async()=>uid(auth&&auth.name), isOwner:async()=>role==='admin', canEdit:async()=>role==='admin', can:async()=>true,
+    profiles:async ids=>Object.fromEntries((Array.isArray(ids)?ids:[ids]).map(i=>[i,{id:i,name:nameOf(i),avatarUrl:'',color:'#00348C',email:null,isMe:i===uid(auth&&auth.name),guest:false}])), name:async()=>(auth&&auth.name)||'' };
+  const downloads={ save:async({filename,data})=>{ const b=data instanceof Blob?data:new Blob([data]); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),4000); return {status:'saved'}; } };
+  window.claude={use:async n=>{ if(n==='downloads') return downloads; await ready; return n==='db'?db:n==='user'?user:null; }};
+
+  async function start(){
+    const [res,lg]=await Promise.all([api('bootstrap'),logosP]);
+    if(!document.getElementById('logos')){ const l=document.createElement('script'); l.type='application/json'; l.id='logos'; l.textContent=lg; document.body.appendChild(l); }
+    role=res.role;
+    const s=document.createElement('script'); s.type='application/json'; s.id='state'; s.textContent=JSON.stringify(res.state).replace(/</g,String.fromCharCode(92)+'u003c'); document.body.appendChild(s);
+    document.getElementById('login').remove();
+    resolveReady();
+    const txt=await Promise.all((await fetch('/p/list.json',{cache:'no-cache'}).then(r=>r.json())).map(n=>fetch('/p/'+n+'.js',{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error('part');return r.text();})));
+    const app=document.createElement('script'); app.id='app-script'; app.textContent=txt.join(''); document.body.appendChild(app);
+    if(role!=='admin'){ /* contributors: locked config is handled by the app via canEdit() */ }
+    const out=document.createElement('button'); out.className='signout'; out.textContent='Sign out'; out.onclick=()=>{try{localStorage.removeItem(LS);}catch(e){} location.reload();}; document.body.appendChild(out);
+  }
+  document.addEventListener('DOMContentLoaded',()=>{
+    if(location.search.includes('logout')){ try{localStorage.removeItem(LS);}catch(e){} auth=null; history.replaceState(null,'',location.pathname); }
+    const f=document.getElementById('loginForm'), msg=document.getElementById('loginMsg');
+    if(auth&&auth.key){ start().catch(()=>{ document.getElementById('login').hidden=false; }); }
+    else document.getElementById('login').hidden=false;
+    f.addEventListener('submit',async e=>{ e.preventDefault(); msg.textContent='Checking…';
+      auth={name:f.name.value.trim(),key:f.pw.value};
+      try{ const r=await fetch('/api/db?auth',{headers:{'x-app-key':auth.key,'x-app-user':auth.name}}); if(r.status===401){ msg.textContent='Wrong username or password.'; auth=null; return; } if(!r.ok) throw 0;
+        try{localStorage.setItem(LS,JSON.stringify(auth));}catch(e){} msg.textContent=''; start(); }catch(err){ msg.textContent='Couldn’t reach the server. Try again.'; } });
+  });
+})();
+</script>
+</body></html>
