@@ -68,6 +68,7 @@
     });
     d.activity = d.activity || [];
     d.feedback = d.feedback || [];
+    growthFix(d);
     return d;
   }
 

@@ -37,7 +37,7 @@
     if (priceSrc === 'finance') data.pricing = price;
     try {
       const j = await api('PUT', { base, data, force: !!force });
-      base = j.savedAt; data.savedAt = j.savedAt; data.savedBy = j.savedBy; dirty = false; conflict = null; dropDraft(); toast('Saved.');
+      base = j.savedAt; data.savedAt = j.savedAt; data.savedBy = j.savedBy; dirty = false; conflict = null; gMigrated = false; dropDraft(); toast('Saved.');
     } catch (e) {
       if (e.conflict) conflict = e.conflict; else toast('Could not save: ' + e.message);
     }
@@ -69,23 +69,24 @@
   }
   function render() {
     const ae = document.activeElement, fid = ae && ae.dataset && ae.dataset.f, ss = ae && ae.selectionStart, sy = window.scrollY;
-    const bx = $('.ls-board'), bsx = bx ? bx.scrollLeft : 0;
+    const bx = $('.ls-board'), bsx = bx ? bx.scrollLeft : 0, gdr = $('.gr-drawer-b'), gds = gdr ? gdr.scrollTop : 0;
     $('#app').innerHTML = shell();
     if (loading) { $('#content').innerHTML = '<div class="ls-panel"><span class="spin" aria-hidden="true"></span> Loading leads…</div>'; return; }
     let h = '';
     if (conflict) h += '<div class="ls-banner warn"><span class="grow"><b>' + esc(conflict.savedBy || 'Someone') + ' saved a newer version ' + esc(when(conflict.savedAt)) + '.</b> Saving now would replace it.</span><button class="btn small" data-act="load-theirs">Load their version</button><button class="btn small" data-act="force-save">Save mine anyway</button></div>';
     if (staleDraft) h += '<div class="ls-banner warn"><span class="grow">You have unsaved edits from earlier in this browser, but a newer version was saved since.</span><button class="btn small" data-act="draft-load">Load my edits</button><button class="btn small" data-act="draft-drop">Delete them</button></div>';
     const t = view.tab;
-    h += t === 'lead' ? leadView() : t === 'leads' ? leadsView() : t === 'followups' ? followView() : t === 'onboarding' ? onboardingView() : t === 'feedback' ? feedbackView() : t === 'activity' ? activityView() : t === 'import' ? importView() : t === 'settings' ? settingsView() : overview();
+    h += t === 'lead' ? leadView() : t === 'leads' ? leadsView() : t === 'growth' ? growthView() : t === 'followups' ? followView() : t === 'onboarding' ? onboardingView() : t === 'feedback' ? feedbackView() : t === 'activity' ? activityView() : t === 'import' ? importView() : t === 'settings' ? settingsView() : overview();
     $('#content').innerHTML = h;
     const tw = $('.tabs .wrap'), ta = tw && tw.querySelector('[aria-selected="true"]'); if (tw && ta && tw.scrollWidth > tw.clientWidth) tw.scrollLeft = Math.max(0, ta.offsetLeft - (tw.clientWidth - ta.offsetWidth) / 2);
     const nb = $('.ls-board'); if (nb && bsx) nb.scrollLeft = bsx;
+    const ndr = $('.gr-drawer-b'); if (ndr && gds) ndr.scrollTop = gds;
     const cs = $('.ls-steps .cur'); if (cs) { const w = cs.parentElement; if (w.scrollWidth > w.clientWidth) w.scrollLeft = Math.max(0, cs.offsetLeft - 16); }
     if (fid) { const el = document.querySelector('[data-f="' + CSS.escape(fid) + '"]'); if (el) { el.focus(); try { if (ss != null && el.setSelectionRange) el.setSelectionRange(ss, ss); } catch (e) {} } }
     window.scrollTo(0, sy);
   }
   function go(tab, lead) { view.tab = tab; view.lead = lead || null; location.hash = tab === 'lead' ? 'lead/' + lead : tab; window.scrollTo(0, 0); render(); }
-  function fromHash() { const h = decodeURIComponent(location.hash.replace(/^#/, '')); if (h.startsWith('lead/')) { view.tab = 'lead'; view.lead = h.slice(5); } else if (TABS.some(([k]) => k === h)) { view.tab = h; view.lead = null; } }
+  function fromHash() { const h = decodeURIComponent(location.hash.replace(/^#/, '')); if (h.startsWith('lead/')) { view.tab = 'lead'; view.lead = h.slice(5); } else if (h === 'growth' || h.startsWith('growth/')) { view.tab = 'growth'; view.lead = null; const pg = h.split('/')[1]; if (pg && G_PAGES.some(([k]) => k === pg)) view.g.page = pg; } else if (TABS.some(([k]) => k === h)) { view.tab = h; view.lead = null; } }
   const head = (t, p, right) => '<div class="ls-head"><div class="grow"><h2>' + esc(t) + '</h2>' + (p ? '<p class="muted">' + esc(p) + '</p>' : '') + '</div>' + (right || '') + '</div>';
   const kpi = (k, v, s, cls) => '<div class="ls-kpi ' + (cls || '') + '"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + '</div><div class="s">' + esc(s) + '</div></div>';
   function priceNote() {
@@ -109,7 +110,7 @@
       h += '<div class="ls-kpis">' + kpi('Invoiced to date', moneyK(inv), 'from Finance') + kpi('Collected', moneyK(paid), inv ? Math.round(paid / inv * 100) + '% of invoiced' : 'nothing invoiced yet') + kpi('Overdue', moneyK(od.reduce((t, v) => t + usd(v), 0)), od.length + ' invoice' + (od.length === 1 ? '' : 's') + ' past due', od.length ? 'alert' : '') + kpi('Signed, not paid yet', wait, 'onboarding waits for payment', wait ? 'alert' : '') + '</div>';
     }
     const counts = FUNNEL.map(s => [s, L.filter(l => (l.stage || 'Researched') === s).length]), mx = Math.max(1, ...counts.map(c => c[1]));
-    h += '<div class="ls-grid"><div class="ls-panel"><h3>Where every airline stands</h3><p class="sub">Airlines at each stage · click a stage to see them</p><div class="ls-funnel">' + counts.map(([s, n]) => '<button type="button" class="ls-frow' + (CUSTOMER.includes(s) ? ' signed' : '') + '" data-act="stage-filter" data-v="' + esc(s) + '"><span>' + esc(s) + '</span><span class="bar2"><span style="width:' + (n ? Math.max(3, n / mx * 100) : 0) + '%"></span></span><span class="n">' + n + '</span></button>').join('') + '</div>';
+    h += '<div class="ls-grid"><div class="ls-panel"><h3>Where every airline stands</h3><p class="sub">Airlines at each stage · click a stage to see them</p><div class="ls-funnel">' + gFunnelRow() + counts.map(([s, n]) => '<button type="button" class="ls-frow' + (CUSTOMER.includes(s) ? ' signed' : '') + '" data-act="stage-filter" data-v="' + esc(s) + '"><span>' + esc(s) + '</span><span class="bar2"><span style="width:' + (n ? Math.max(3, n / mx * 100) : 0) + '%"></span></span><span class="n">' + n + '</span></button>').join('') + '</div>';
     const side = ['Nurture', 'Lost', 'Do not approach'].map(s => s + ' ' + L.filter(l => l.stage === s).length).join(' · ');
     h += '<p class="ls-note">' + esc(side) + '</p></div>';
     const next = act.filter(l => l.nextActionDate).sort((a, b) => a.nextActionDate < b.nextActionDate ? -1 : 1).slice(0, 8);
