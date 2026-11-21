@@ -1,11 +1,7 @@
-    const q = v => { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-    const txt = [cols.map(c => q(c[0])).join(',')].concat(data.leads.map(l => cols.map(c => q(c[1](l))).join(','))).join('\n');
-    const u = URL.createObjectURL(new Blob([String.fromCharCode(65279) + txt], { type: 'text/csv' })), a = document.createElement('a'); a.href = u; a.download = 'aerostrat-leads-' + today() + '.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000);
-  }
-
   /* ---------- events ---------- */
-  function setField(f, v, el) {
+  function setField(f, v, el, isChange) {
     const p = f.split(':');
+    if (p[0][0] === 'g' || p[0] === 'ms') return growthField(p, v, el, isChange);
     if (p[0] === 'f') { view.f[p[1]] = v; return 'render'; }
     if (p[0] === 'af') { view.actF[p[1]] = v; return 'render'; }
     if (p[0] === 'new') { const m = { lead: 'newLead', channel: 'newChannel', date: 'date', text: 'text', next: 'next' }; view.actF[m[p[1]]] = v; return ''; }
@@ -37,8 +33,8 @@
   function onField(e, isChange) {
     const el = e.target.closest('[data-f]'); if (!el) return;
     const v = el.type === 'checkbox' ? el.checked : el.value;
-    const r = setField(el.dataset.f, v, el);
-    if (r === 'render' && (isChange || ['f:q', 'add:q', 'add:name'].includes(el.dataset.f))) render();
+    const r = setField(el.dataset.f, v, el, isChange);
+    if (r === 'live' || (r === 'render' && (isChange || ['f:q', 'add:q', 'add:name', 'gof:q', 'gcf:q'].includes(el.dataset.f)))) render();
     else if (r === 'calc' && isChange) render();
   }
   async function copyText(t) {
@@ -51,6 +47,7 @@
     const ol = e.target.closest('[data-open-l]'); if (ol) { e.preventDefault(); go('lead', ol.dataset.openL); return; }
     const b = e.target.closest('[data-act]'); if (!b) return;
     const a = b.dataset.act, id = b.dataset.id;
+    if (a.startsWith('g-')) { await growthClick(a, b, e); return; }
     if (a === 'tab') { e.preventDefault(); go(b.dataset.v); }
     else if (a === 'save') save(false);
     else if (a === 'force-save') save(true);

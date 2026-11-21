@@ -40,7 +40,7 @@
   const FB_STATUS = ['Open', 'Answered', 'Planned', 'Done'];
   const BILLING = [['annual', 'Yearly'], ['quarterly', 'Quarterly'], ['monthly', 'Monthly']];
   const COLD_DAYS = 14;
-  const TABS = [['overview', 'Overview'], ['leads', 'Leads'], ['followups', 'Follow-ups'], ['onboarding', 'Onboarding'], ['feedback', 'Feedback'], ['activity', 'Activity'], ['import', 'Import from Finance'], ['settings', 'Settings']];
+  const TABS = [['overview', 'Overview'], ['leads', 'Leads'], ['growth', 'Growth'], ['followups', 'Follow-ups'], ['onboarding', 'Onboarding'], ['feedback', 'Feedback'], ['activity', 'Activity'], ['import', 'Import from Finance'], ['settings', 'Settings']];
   const SWITCH = () => '<nav class="ws-switch" aria-label="Workspace"><a href="/sales#overview"' + (view.tab !== 'onboarding' ? ' aria-current="page"' : '') + '>Sales</a><a href="/sales#onboarding"' + (view.tab === 'onboarding' ? ' aria-current="page"' : '') + '>Onboarding</a><a href="/#overview">Finance</a></nav>';
   /* checklists shown on each airline from a given stage (SOP sections 4 and 5) */
   const CHECKS = [

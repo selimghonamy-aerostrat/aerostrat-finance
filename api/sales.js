@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const SECRET = process.env.DB_SECRET || 'dev';
 const PREFIX = `db/${SECRET}/sales/`;
 const KEEP = 40;
+const BACKUP = `db/${SECRET}/sales-backup/`; // outside PREFIX, so versions() never lists or prunes it
 
 function eq(a, b) { const x = Buffer.from(String(a || '')), y = Buffer.from(String(b || '')); return x.length === y.length && crypto.timingSafeEqual(x, y); }
 function roleOf(req) {
@@ -52,14 +53,20 @@ module.exports = async (req, res) => {
       const data = body.data;
       if (!data || typeof data !== 'object' || !Array.isArray(data.leads)) { res.status(400).json({ error: 'Nothing to save.' }); return; }
       const all = await versions();
-      if (all.length && !body.force) {
-        const cur = await readBlob(all[0]);
+      const cur = all.length ? await readBlob(all[0]).catch(e => { if (!body.force) throw e; return null; }) : null;
+      if (cur && !body.force) {
         if ((cur.savedAt || '') !== (body.base || '')) {
           res.status(409).json({ code: 'conflict', data: cur, savedAt: cur.savedAt || '', savedBy: cur.savedBy || '' });
           return;
         }
       }
       const now = new Date().toISOString();
+      // Growth module (schema 3): before the first save that adds its collections, keep a copy of the data as it was.
+      let backup = '';
+      if (cur && Number(data.schema_version || 0) >= 3 && !(Number(cur.schema_version || 0) >= 3)) {
+        backup = 'pre-growth-' + now.replace(/[:.]/g, '-') + '.json';
+        await put(BACKUP + backup, JSON.stringify(cur), { access: 'public', contentType: 'application/json', addRandomSuffix: false });
+      }
       data.savedAt = now;
       data.savedBy = String(req.headers['x-app-user'] || '').trim() || 'Someone';
       const s = JSON.stringify(data);
@@ -68,7 +75,7 @@ module.exports = async (req, res) => {
       await put(name, s, { access: 'public', contentType: 'application/json', addRandomSuffix: false, cacheControlMaxAge: 60 });
       const old = all.slice(KEEP - 1);
       if (old.length) { try { await del(old.map(b => b.url)); } catch (e) { /* old versions can wait */ } }
-      res.status(200).json({ ok: true, savedAt: now, savedBy: data.savedBy });
+      res.status(200).json(Object.assign({ ok: true, savedAt: now, savedBy: data.savedBy }, backup ? { backup } : {}));
       return;
     }
     res.status(405).json({ error: 'Method not allowed' });
